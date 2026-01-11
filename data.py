@@ -8,127 +8,122 @@ import sys
 # ==========================================
 API_TOKEN = "c95bd6ad019cee15267a1a4dda6c9e322792598a"
 
-# Change this line to switch cities for your entire project
-CURRENT_FILE_PATH = r'PM 2.5 Data\hanoi-air-quality.csv'
+# Default file for the project
+CURRENT_FILE_PATH = 'PM 2.5 Data/hanoi-air-quality.csv'
 
-# Mapping files to API City Names
+# Map files to API Cities
 LOCATIONS = {
-    # Singapore
-    r'PM 2.5 Data\south,-singapore-air-quality.csv': 'singapore/south',
-    r'PM 2.5 Data\north,-singapore-air-quality.csv': 'singapore/north',
-    r'PM 2.5 Data\east,-singapore-air-quality.csv':  'singapore/east',
-    r'PM 2.5 Data\west,-singapore-air-quality.csv':  'singapore/west',
-    r'PM 2.5 Data\central,-singapore-air-quality.csv': 'singapore/central',
-
-    # Vietnam
-    r'PM 2.5 Data\hanoi-air-quality.csv': 'hanoi',
-    r'PM 2.5 Data\da-nang-air-quality.csv': 'danang',
-
-    # India
-    r'PM 2.5 Data\mundka,-delhi, delhi, india-air-quality.csv': 'delhi/mundka',
+    'PM 2.5 Data/hanoi-air-quality.csv': 'hanoi',
+    'PM 2.5 Data/south,-singapore-air-quality.csv': 'singapore/south',
+    'PM 2.5 Data/north,-singapore-air-quality.csv': 'singapore/north',
+    'PM 2.5 Data/east,-singapore-air-quality.csv':  'singapore/east',
+    'PM 2.5 Data/west,-singapore-air-quality.csv':  'singapore/west',
+    'PM 2.5 Data/central,-singapore-air-quality.csv': 'singapore/central',
+    'PM 2.5 Data/da-nang-air-quality.csv': 'danang',
+    'PM 2.5 Data/mundka,-delhi, delhi, india-air-quality.csv': 'delhi/mundka',
 }
 
 # ==========================================
-# 2. INTERNAL API FUNCTIONS (Hidden from Main)
+# 2. INTERNAL API UPDATER
 # ==========================================
 def _fetch_and_update(csv_path):
-    """
-    Connects to WAQI API and appends today's data to the CSV.
-    This is internal (starts with _) because main.py doesn't need to call it directly.
-    """
-    # 1. Identify City
-    # Normalize paths to handle Windows/Mac slashes
-    norm_path = os.path.normpath(csv_path)
-    # create a lookup dict with normalized keys
-    norm_locations = {os.path.normpath(k): v for k, v in LOCATIONS.items()}
+    """Fetches data from WAQI and matches your specific CSV format."""
     
-    if norm_path not in norm_locations:
-        print(f" WARNING: No API mapping found for {csv_path}. Skipping update.")
+    # 1. Find the city for this file
+    norm_path = os.path.normpath(csv_path).replace('\\', '/') # Unify slashes
+    
+    # Simple lookup - check if any key ends with the filename
+    city_name = None
+    for key, val in LOCATIONS.items():
+        if os.path.normpath(key).replace('\\', '/') == norm_path:
+            city_name = val
+            break
+            
+    if not city_name:
+        print(f"⚠️  No API mapping found for {csv_path}. Skipping update.")
         return
 
-    city_name = norm_locations[norm_path]
-    url = f"https://api.waqi.info/feed/{city_name}/?token={API_TOKEN}"
-    
-    print(f"🔄 Checking for new data for: {city_name}...")
-
+    # 2. Fetch Data
+    print(f"🔄 Connecting to API for {city_name}...")
     try:
+        url = f"https://api.waqi.info/feed/{city_name}/?token={API_TOKEN}"
         response = requests.get(url, timeout=10)
         payload = response.json()
     except Exception as e:
-        print(f"❌ Network Error: {e}")
+        print(f"❌ Connection failed: {e}")
         return
 
     if payload.get('status') != 'ok':
-        print(f"❌ API Error: {payload.get('data')}")
         return
 
-    # 2. Extract Data
     data = payload.get('data', {})
     iaqi = data.get('iaqi', {})
     time_info = data.get('time', {})
     
-    date_str = time_info.get('s', '').split(' ')[0] # YYYY-MM-DD
+    # 3. Format Date to YYYY/MM/DD (Matches your file)
+    # API gives "2025-01-11", we convert to "2025/01/11"
+    raw_date = time_info.get('s', '').split(' ')[0]
+    formatted_date = raw_date.replace('-', '/') 
 
-    if not date_str:
+    if not formatted_date:
         return
 
+    # 4. Prepare Row (Included 'no2' to match your header)
+    # Note: Keys match your CSV headers exactly (some might have spaces)
     new_row = {
-        'date': date_str,
+        'date': formatted_date,
         ' pm25': iaqi.get('pm25', {}).get('v', ''),
         ' pm10': iaqi.get('pm10', {}).get('v', ''),
         ' o3':   iaqi.get('o3', {}).get('v', ''),
+        ' no2':  iaqi.get('no2', {}).get('v', ''), # Added NO2
         ' so2':  iaqi.get('so2', {}).get('v', ''),
         ' co':   iaqi.get('co', {}).get('v', '')
     }
 
-    # 3. Update CSV safely
+    # 5. Save to CSV
     try:
-        # If file exists, check for duplicates
         if os.path.exists(csv_path):
             df = pd.read_csv(csv_path)
-            if date_str in df['date'].values:
-                print(f"✅ Data up-to-date ({date_str} exists).")
+            
+            # Check for duplicates using the slash format
+            # We convert column to string to ensure comparison works
+            if formatted_date in df['date'].astype(str).values:
+                print(f"✅ Data up-to-date for {formatted_date}.")
                 return
-            else:
-                # Append
-                new_df = pd.DataFrame([new_row])
-                df = pd.concat([df, new_df], ignore_index=True)
-                df.to_csv(csv_path, index=False)
-                print(f"✅ UPDATED: Added data for {date_str}")
-        else:
-            # Create new file
-            df = pd.DataFrame([new_row])
+            
+            # Append
+            new_df = pd.DataFrame([new_row])
+            df = pd.concat([df, new_df], ignore_index=True)
             df.to_csv(csv_path, index=False)
-            print(f"✅ CREATED: New file for {city_name}")
+            print(f"✅ UPDATED: Added row for {formatted_date}")
+        else:
+            print(f"❌ File not found: {csv_path}")
 
     except Exception as e:
-        print(f"❌ File Error: {e}")
+        print(f"❌ Error saving CSV: {e}")
 
 # ==========================================
 # 3. PUBLIC DATA LOADER (Called by Main)
 # ==========================================
 def get_data(file_path=CURRENT_FILE_PATH):
     """
-    The only function main.py needs to know.
-    1. Updates data from API
-    2. Loads CSV
-    3. Cleans and formats it
+    Main function to load and clean data.
     """
-    
-    # A. Try to update first
+    # A. Update first
     _fetch_and_update(file_path)
 
-    # B. Load the file
+    # B. Load File
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"File not found: {file_path}")
     
     df = pd.read_csv(file_path)
 
-    # C. Clean Columns (The "Space" Bug Fix)
+    # C. Clean Columns (Remove spaces from ' pm25', etc.)
     df.columns = df.columns.str.strip()
 
-    # D. Convert to Numeric
-    cols = ['pm25', 'pm10', 'o3', 'so2', 'co']
+    # D. Convert Numerics
+    # Added 'no2' to the list
+    cols = ['pm25', 'pm10', 'o3', 'no2', 'so2', 'co']
     for col in cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -147,6 +142,5 @@ def get_data(file_path=CURRENT_FILE_PATH):
     return df_clean
 
 if __name__ == "__main__":
-    # Test run if executed directly
     df = get_data()
     print(df.tail())
