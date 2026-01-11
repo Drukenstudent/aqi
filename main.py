@@ -35,7 +35,7 @@ sim_inputs = {} # Dictionary to store our random variates
 print(f"--- Step 1 & 2: Fitting PDFs and Generating {N} Random Variates ---")
 
 # We fit PDFs for ALL inputs, including the Lag variable
-input_vars = [' pm10', ' o3', ' so2', ' co', 'PM2.5_Lag1']
+input_vars = ['pm10', 'o3', 'so2', 'co', 'PM2.5_Lag1']
 
 for col in input_vars:
     # A. PREPARE DATA
