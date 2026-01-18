@@ -18,12 +18,12 @@ potential_vars = ['pm25', 'pm10', 'o3', 'no2', 'so2', 'co']
 plot_vars = [col for col in potential_vars if col in df_clean.columns]
 
 print(f"Plotting variables: {plot_vars}")
+print("Generating figures... (Windows will open shortly)")
 
 # ==========================================
 # 2. VISUALIZATION 1: CORRELATION HEATMAP
 # ==========================================
-# This helps justify the "Sensitivity Analysis" results
-plt.figure(figsize=(10, 8))
+plt.figure(num="Figure 1: Correlation Matrix", figsize=(10, 8))
 corr_matrix = df_clean[plot_vars].corr()
 
 sns.heatmap(corr_matrix, 
@@ -35,25 +35,26 @@ sns.heatmap(corr_matrix,
 
 plt.title("Correlation Matrix: Pollutant Relationships", fontsize=14, weight='bold')
 plt.tight_layout()
-plt.show()
 
 # ==========================================
 # 3. VISUALIZATION 2: JOINT PLOTS (Regression)
 # ==========================================
-# Compares your biggest driver (likely PM10) vs Target (PM2.5)
+# Note: JointGrid creates its own figure, so we don't use plt.figure() first
 if 'pm10' in plot_vars:
     g = sns.jointplot(x="pm10", y="pm25", data=df_clean, kind="reg", 
                       height=8, color="g", scatter_kws={'alpha':0.3, 's':10})
+    # Fix formatting bug: Adjust title height so it doesn't overlap
     g.fig.suptitle("Relationship: PM10 vs PM2.5", y=1.02, fontsize=14, weight='bold')
-    plt.show()
+    g.fig.canvas.manager.set_window_title("Figure 2: Joint Plot")
 
 # ==========================================
 # 4. VISUALIZATION 3: DISTRIBUTION MATRIX
 # ==========================================
-# Improved version of histograms
 num_vars = len(plot_vars)
-rows = (num_vars + 2) // 3
-fig, axes = plt.subplots(rows, 3, figsize=(15, 5*rows))
+cols = 3
+rows = (num_vars + cols - 1) // cols  # Math trick to always round up
+
+fig, axes = plt.subplots(rows, cols, figsize=(15, 4 * rows), num="Figure 3: Distributions")
 axes = axes.flatten()
 
 for i, col in enumerate(plot_vars):
@@ -69,17 +70,16 @@ for i, col in enumerate(plot_vars):
     ax.set_title(f"Distribution of {col.upper()}", fontsize=10)
     ax.legend()
 
-# Hide empty subplots
-for j in range(i+1, len(axes)):
+# Hide empty subplots if any exist
+for j in range(i + 1, len(axes)):
     axes[j].axis('off')
 
 plt.tight_layout()
-plt.show()
 
 # ==========================================
 # 5. VISUALIZATION 4: TIME SERIES (Haze Episodes)
 # ==========================================
-plt.figure(figsize=(12, 6))
+plt.figure(num="Figure 4: Time Series", figsize=(12, 6))
 sns.lineplot(x='date', y='pm25', data=df_clean, color='gray', alpha=0.6, label='Daily PM2.5')
 
 # Highlight Extreme Events (>150)
@@ -91,4 +91,10 @@ plt.ylabel("PM2.5 Concentration")
 plt.xlabel("Year")
 plt.legend()
 plt.grid(True, alpha=0.3)
+plt.tight_layout()
+
+# ==========================================
+# FINAL COMMAND
+# ==========================================
+print("Done! Showing all plots now...")
 plt.show()
