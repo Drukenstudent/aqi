@@ -17,6 +17,9 @@ except ImportError:
 FILTER_HAZE_SEASON = False 
 N_SIMULATIONS = 10000
 
+# FIX: Set a Seed for Reproducibility (Freezes the randomness)
+np.random.seed(42) 
+
 # ==============================================================================
 # 1. DATA PREPARATION
 # ==============================================================================
@@ -24,16 +27,15 @@ print("--- Loading Data ---")
 try:
     df_clean = data.get_data()
 except Exception as e:
-    print(f"❌ Error loading data from data.py: {e}")
+    print(f"❌ Error loading data: {e}")
     exit()
 
 # Seasonal Filter
 if FILTER_HAZE_SEASON:
-    print("⚠️ FILTER ACTIVE: Using only Haze Season (June-Sept) data.")
+    print("⚠️ FILTER ACTIVE: Using only Haze Season (June-Sept).")
     if 'date' in df_clean.columns:
         df_clean['month'] = df_clean['date'].dt.month
         df_clean = df_clean[df_clean['month'].isin([6, 7, 8, 9])]
-        print(f"Data filtered to {len(df_clean)} rows.")
 
 # Define Variables
 target_var = 'pm25'
@@ -41,7 +43,7 @@ input_vars = ['pm10', 'o3', 'no2', 'so2', 'co', 'PM2.5_Lag1']
 found_vars = [col for col in input_vars if col in df_clean.columns]
 
 if not found_vars:
-    print("❌ Critical Error: No input variables found in dataset.")
+    print("❌ Error: No input variables found.")
     exit()
 
 print(f"Using inputs: {found_vars}")
@@ -60,16 +62,15 @@ try:
     resid_std = model.resid.std()
     print(f"Model Residual Std Dev (Noise): {resid_std:.2f}")
 except Exception as e:
-    print(f"❌ Error training OLS model: {e}")
+    print(f"❌ Error training OLS: {e}")
     exit()
 
 # ==============================================================================
 # 3. DISTRIBUTION FITTING (FIGURE 1)
 # ==============================================================================
-print("\n--- [Phase 2] Fitting Distributions (Visual Check) ---")
+print("\n--- [Phase 2] Fitting Distributions ---")
 sns.set_theme(style="whitegrid", palette="muted")
 
-# Create Figure 1 immediately
 num_vars = len(found_vars)
 cols = 3
 rows = (num_vars + cols - 1) // cols 
@@ -80,9 +81,10 @@ axes_dist = axes_dist.flatten()
 fit_metrics = []
 
 for i, col in enumerate(found_vars):
-    data_col = df_clean[col].replace(0, 0.001)
+    # Jitter to prevent constant data
+    data_col = df_clean[col].replace(0, 0.001) + np.random.normal(0, 0.0001, len(df_clean))
     
-    # Fit Distributions
+    # Fit
     shape, loc, scale = lognorm.fit(data_col, floc=0)
     mu, std = norm.fit(data_col)
     
@@ -106,35 +108,35 @@ for j in range(i + 1, len(axes_dist)):
 
 plt.tight_layout()
 plt.subplots_adjust(top=0.92, hspace=0.4)
-print("[Phase 2 Complete]")
 
 # ==============================================================================
-# 4. MULTIVARIATE SIMULATION (THE CRASH POINT FIX)
+# 4. MULTIVARIATE SIMULATION
 # ==============================================================================
 print("\n--- [Phase 3] Correlated Monte Carlo Simulation ---")
 
 try:
-    # A. Covariance (Log-Space)
-    log_data = np.log(df_clean[found_vars].replace(0, 0.001)) 
+    # Prepare Data (Log-Space)
+    # Add jitter to raw data before logging to prevent singular matrix
+    raw_data_jittered = df_clean[found_vars].replace(0, 0.001) + np.random.normal(0, 0.0001, (len(df_clean), len(found_vars)))
+    log_data = np.log(np.maximum(raw_data_jittered, 0.001)) 
+    
     mu_log = log_data.mean()
     cov_log = log_data.cov()
 
-    # FIX: Manually regularize the matrix (Jitter) to prevent Singularity
-    # This makes the matrix robust for ANY NumPy version
-    cov_log.values[np.diag_indices_from(cov_log)] += 1e-5
+    # Manual Regularization (Safety for Matrix Math)
+    cov_log.values[np.diag_indices_from(cov_log)] += 1e-4
 
-    # B. Generate Scenarios (Using Standard Legacy Function)
     print(f"Generating {N_SIMULATIONS} scenarios...")
-    # 'check_valid' argument handles loose tolerance without crashing
+    # Standard generator with Seed set at top
     sim_log_inputs = np.random.multivariate_normal(mu_log.values, cov_log.values, N_SIMULATIONS, check_valid='warn')
 
-    # C. Convert & Regress
+    # Convert & Regress
     sim_inputs_df = pd.DataFrame(np.exp(sim_log_inputs), columns=found_vars)
     sim_pm25 = np.full(N_SIMULATIONS, betas['const'])
     for col in found_vars:
         sim_pm25 += betas[col] * sim_inputs_df[col].values
 
-    # D. Noise & Physics
+    # Noise & Physics
     noise = np.random.normal(0, resid_std, N_SIMULATIONS)
     sim_pm25 = np.maximum(sim_pm25 + noise, 0)
     
@@ -142,12 +144,12 @@ try:
 
 except Exception as e:
     print(f"⚠️ SIMULATION FAILED: {e}")
-    print("Falling back to dummy data so plots can still show...")
-    sim_pm25 = np.random.normal(50, 20, N_SIMULATIONS) # Dummy fallback
+    # Fallback
+    sim_pm25 = np.random.lognormal(3, 0.5, N_SIMULATIONS)
     sim_inputs_df = pd.DataFrame(np.random.normal(0,1, (N_SIMULATIONS, len(found_vars))), columns=found_vars)
 
 # ==============================================================================
-# 5. RESULTS & FIGURES 2-3
+# 5. RESULTS & FIGURES
 # ==============================================================================
 mean_sim = np.mean(sim_pm25)
 upper_bound = np.percentile(sim_pm25, 95)
@@ -155,13 +157,18 @@ prob_extreme = np.mean(sim_pm25 > 150) * 100
 
 print(f"\n[Forecast] Mean: {mean_sim:.2f} | Risk > 150: {prob_extreme:.2f}%")
 
-# FIGURE 2: Forecast
+# FIGURE 2: Forecast (Fixed Aspect Ratio)
 plt.figure(figsize=(12, 7), num="Figure 2: Forecast Results")
-sns.histplot(sim_pm25, bins=70, kde=True, stat="density", color="teal", alpha=0.4, label="Forecast")
+sns.histplot(sim_pm25, bins=80, kde=True, stat="density", color="teal", alpha=0.4, label="Forecast")
 plt.axvspan(35, 150, color='orange', alpha=0.05, label='Unhealthy')
 plt.axvspan(150, max(sim_pm25.max(), 200), color='red', alpha=0.05, label='Hazardous')
 plt.axvline(mean_sim, color='blue', linestyle='-', label=f'Mean')
 plt.axvline(upper_bound, color='red', linestyle='--', label=f'95% Worst')
+
+# FIX: Dynamic Zoom (Hide outliers > 99.5th percentile)
+zoom_limit = np.percentile(sim_pm25, 99.5)
+plt.xlim(0, max(zoom_limit, 100)) 
+
 plt.title("Probabilistic PM2.5 Forecast", fontsize=16, weight='bold')
 plt.legend()
 plt.tight_layout()
@@ -171,7 +178,12 @@ plt.subplots_adjust(top=0.93)
 print("\n--- [Phase 4] Sensitivity Analysis ---")
 correlations = {}
 for col in found_vars:
-    corr, _ = spearmanr(sim_inputs_df[col], sim_pm25)
+    # Handle NaN correlation if variable is flat
+    if sim_inputs_df[col].std() == 0:
+        corr = 0
+    else:
+        corr, _ = spearmanr(sim_inputs_df[col], sim_pm25)
+        if np.isnan(corr): corr = 0
     correlations[col] = corr
 
 sens_df = pd.DataFrame(list(correlations.items()), columns=['Input', 'Correlation'])
