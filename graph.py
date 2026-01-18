@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+import data
 from scipy.stats import lognorm
 
 # ==========================================
@@ -9,29 +10,30 @@ from scipy.stats import lognorm
 # Use raw string (r'...') or forward slashes to avoid path errors
 file_path = r'PM 2.5 Data\\hanoi-air-quality.csv' 
 
-print(f"Loading data from: {file_path}")
-df = pd.read_csv(file_path)
+#print(f"Loading data from: {file_path}")
+#df = pd.read_csv(file_path)
+df_clean = data.get_data()
 
 # FIX: Remove hidden spaces in column names (e.g., ' pm25' -> 'pm25')
-df.columns = df.columns.str.strip()
+df_clean.columns = df_clean.columns.str.strip()
 
 # Convert columns to numeric, turning errors (like ' ') into NaN
 cols_to_fix = ['pm25', 'pm10', 'o3', 'so2', 'co']
 for col in cols_to_fix:
-    if col in df.columns:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
+    if col in df_clean.columns:
+        df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce')
 
 # Date sorting
-if 'date' in df.columns:
-    df['date'] = pd.to_datetime(df['date'])
-    df = df.sort_values('date')
+if 'date' in df_clean.columns:
+    df_clean['date'] = pd.to_datetime(df_clean['date'])
+    df_clean = df_clean.sort_values('date')
 
 # Create Lag Variable
-if 'pm25' in df.columns:
-    df['PM2.5_Lag1'] = df['pm25'].shift(1)
+if 'pm25' in df_clean.columns:
+    df_clean['PM2.5_Lag1'] = df_clean['pm25'].shift(1)
 
 # Drop NaNs to get the final clean dataset
-df_clean = df.dropna()
+
 print(f"Data cleaned. Rows remaining: {len(df_clean)}")
 
 # ==========================================

@@ -9,7 +9,7 @@ import sys
 API_TOKEN = "c95bd6ad019cee15267a1a4dda6c9e322792598a"
 
 # Default file for the project
-CURRENT_FILE_PATH = 'PM 2.5 Data/hanoi-air-quality.csv'
+CURRENT_FILE_PATH = 'PM 2.5 Data/central,-singapore-air-quality.csv'
 
 # Map files to API Cities
 LOCATIONS = {
