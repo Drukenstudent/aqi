@@ -1,86 +1,94 @@
 import matplotlib.pyplot as plt
+import seaborn as sns
 import pandas as pd
 import numpy as np
-import data
-from scipy.stats import lognorm
+import data  # Your master loader
 
 # ==========================================
-# 1. LOAD & CLEAN DATA (Do this ONCE)
+# 1. SETUP & DATA LOAD
 # ==========================================
-# Use raw string (r'...') or forward slashes to avoid path errors
-file_path = r'PM 2.5 Data\\hanoi-air-quality.csv' 
+# Set the "Scientific" theme
+sns.set_theme(style="whitegrid", palette="muted")
 
-#print(f"Loading data from: {file_path}")
-#df = pd.read_csv(file_path)
+print("--- Loading Data ---")
 df_clean = data.get_data()
 
-# FIX: Remove hidden spaces in column names (e.g., ' pm25' -> 'pm25')
-df_clean.columns = df_clean.columns.str.strip()
+# Filter for the variables we actually care about
+potential_vars = ['pm25', 'pm10', 'o3', 'no2', 'so2', 'co']
+plot_vars = [col for col in potential_vars if col in df_clean.columns]
 
-# Convert columns to numeric, turning errors (like ' ') into NaN
-cols_to_fix = ['pm25', 'pm10', 'o3', 'so2', 'co']
-for col in cols_to_fix:
-    if col in df_clean.columns:
-        df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce')
-
-# Date sorting
-if 'date' in df_clean.columns:
-    df_clean['date'] = pd.to_datetime(df_clean['date'])
-    df_clean = df_clean.sort_values('date')
-
-# Create Lag Variable
-if 'pm25' in df_clean.columns:
-    df_clean['PM2.5_Lag1'] = df_clean['pm25'].shift(1)
-
-# Drop NaNs to get the final clean dataset
-
-print(f"Data cleaned. Rows remaining: {len(df_clean)}")
+print(f"Plotting variables: {plot_vars}")
 
 # ==========================================
-# 2. PLOTTING LOOP
+# 2. VISUALIZATION 1: CORRELATION HEATMAP
 # ==========================================
-input_vars = ['pm10', 'o3', 'so2', 'co']
+# This helps justify the "Sensitivity Analysis" results
+plt.figure(figsize=(10, 8))
+corr_matrix = df_clean[plot_vars].corr()
 
-# Create 2x2 grid
-fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+sns.heatmap(corr_matrix, 
+            annot=True,      # Show numbers
+            fmt=".2f",       # 2 decimal places
+            cmap="coolwarm", # Red (High Corr) to Blue (Low Corr)
+            linewidths=0.5, 
+            vmin=-1, vmax=1)
+
+plt.title("Correlation Matrix: Pollutant Relationships", fontsize=14, weight='bold')
+plt.tight_layout()
+plt.show()
+
+# ==========================================
+# 3. VISUALIZATION 2: JOINT PLOTS (Regression)
+# ==========================================
+# Compares your biggest driver (likely PM10) vs Target (PM2.5)
+if 'pm10' in plot_vars:
+    g = sns.jointplot(x="pm10", y="pm25", data=df_clean, kind="reg", 
+                      height=8, color="g", scatter_kws={'alpha':0.3, 's':10})
+    g.fig.suptitle("Relationship: PM10 vs PM2.5", y=1.02, fontsize=14, weight='bold')
+    plt.show()
+
+# ==========================================
+# 4. VISUALIZATION 3: DISTRIBUTION MATRIX
+# ==========================================
+# Improved version of histograms
+num_vars = len(plot_vars)
+rows = (num_vars + 2) // 3
+fig, axes = plt.subplots(rows, 3, figsize=(15, 5*rows))
 axes = axes.flatten()
 
-print("Starting Plot Loop...")
-
-# Use 'var_name' to avoid confusing it with previous variables
-for i, var_name in enumerate(input_vars):
+for i, col in enumerate(plot_vars):
     ax = axes[i]
     
-    # Check if the column exists
-    if var_name not in df_clean.columns:
-        print(f"Skipping {var_name}: Not found in CSV columns: {df_clean.columns.tolist()}")
-        ax.text(0.5, 0.5, f"{var_name} Not Found", ha='center')
-        continue
-
-    # Get Data (Replace 0 with epsilon for Log-Normal fitting)
-    data = df_clean[var_name].replace(0, 0.001)
+    # Histogram with Kernel Density Estimate (KDE) line
+    sns.histplot(df_clean[col], kde=True, stat="density", ax=ax, color="skyblue")
     
-    if len(data) == 0:
-        print(f"WARNING: No data for {var_name}")
-        continue
-
-    print(f"Plotting {var_name}...")
-
-    # A. Plot Histogram (The Bars)
-    ax.hist(data, bins=50, density=True, alpha=0.6, color='skyblue', edgecolor='black', label='Historical Data')
+    # Add mean line
+    mean_val = df_clean[col].mean()
+    ax.axvline(mean_val, color='red', linestyle='--', label=f'Mean: {mean_val:.1f}')
     
-    # B. Fit Log-Normal Curve (The Red Line)
-    # floc=0 forces the curve to start at 0 (Physical reality)
-    s, loc, scale = lognorm.fit(data, floc=0)
-    
-    # C. Generate the Line
-    x = np.linspace(data.min(), data.max(), 100)
-    pdf = lognorm.pdf(x, s, loc=loc, scale=scale)
-    ax.plot(x, pdf, 'r-', linewidth=2, label=f'Log-Normal (s={s:.2f})')
-    
-    # D. Labels
-    ax.set_title(f'{var_name.upper()} Distribution', fontsize=12)
+    ax.set_title(f"Distribution of {col.upper()}", fontsize=10)
     ax.legend()
 
+# Hide empty subplots
+for j in range(i+1, len(axes)):
+    axes[j].axis('off')
+
 plt.tight_layout()
+plt.show()
+
+# ==========================================
+# 5. VISUALIZATION 4: TIME SERIES (Haze Episodes)
+# ==========================================
+plt.figure(figsize=(12, 6))
+sns.lineplot(x='date', y='pm25', data=df_clean, color='gray', alpha=0.6, label='Daily PM2.5')
+
+# Highlight Extreme Events (>150)
+extreme_days = df_clean[df_clean['pm25'] > 150]
+plt.scatter(extreme_days['date'], extreme_days['pm25'], color='red', s=20, label='Hazardous Events (>150)')
+
+plt.title("Historical Air Quality Timeline (Haze Identification)", fontsize=14, weight='bold')
+plt.ylabel("PM2.5 Concentration")
+plt.xlabel("Year")
+plt.legend()
+plt.grid(True, alpha=0.3)
 plt.show()
