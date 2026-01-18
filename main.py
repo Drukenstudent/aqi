@@ -15,7 +15,6 @@ print("--- Loading Data ---")
 df_clean = data.get_data()
 
 # Define Model Variables
-# We add 'no2' if it exists in the data
 input_vars = ['pm10', 'o3', 'no2', 'so2', 'co', 'PM2.5_Lag1'] 
 # Safety check: Only keep columns that actually exist in the CSV
 input_vars = [col for col in input_vars if col in df_clean.columns]
@@ -44,7 +43,6 @@ print(model.summary())
 print(f"\n[Baseline Comparison]")
 print(f"Deterministic Model R²: {r2_ols:.3f}")
 print(f"Deterministic Model RMSE: {rmse_ols:.2f}")
-print("Use these numbers to argue that deterministic models lack risk context.")
 
 # ==============================================================================
 # 3. DISTRIBUTION FITTING & JUSTIFICATION (Section 4.1)
@@ -57,9 +55,13 @@ fit_metrics = []
 # Set Seaborn theme
 sns.set_theme(style="whitegrid", palette="muted")
 
-# Create a figure for Distribution plots
-rows = (len(input_vars) + 2) // 3 
-fig_dist, axes_dist = plt.subplots(rows, 3, figsize=(15, 5 * rows))
+# Dynamic Layout Calculation
+num_vars = len(input_vars)
+cols = 3
+rows = (num_vars + cols - 1) // cols 
+
+# FIGURE 1: Distribution Fits
+fig_dist, axes_dist = plt.subplots(rows, cols, figsize=(15, 5 * rows), num="Figure 1: Distribution Fitting")
 axes_dist = axes_dist.flatten()
 
 for i, col in enumerate(input_vars):
@@ -98,8 +100,12 @@ for i, col in enumerate(input_vars):
         ax.set_title(f"{col.upper()} Distribution Fit")
         ax.legend()
 
+# Hide empty subplots
+for j in range(i + 1, len(axes_dist)):
+    axes_dist[j].axis('off')
+
 plt.tight_layout()
-plt.show()
+# NO plt.show() here! We wait until the end.
 
 # Print Fit Metrics Table
 print("\n[Distribution Justification]")
@@ -125,8 +131,8 @@ lower_bound = np.percentile(sim_pm25, 2.5)
 upper_bound = np.percentile(sim_pm25, 97.5)
 
 # Risk Thresholds
-risk_unhealthy = 55   # Example Threshold
-risk_extreme = 150    # Hazardous Threshold
+risk_unhealthy = 55   
+risk_extreme = 150    
 
 prob_unhealthy = np.mean(sim_pm25 > risk_unhealthy) * 100
 prob_extreme = np.mean(sim_pm25 > risk_extreme) * 100
@@ -136,23 +142,18 @@ print(f"Mean Prediction: {mean_sim:.2f} (vs Deterministic: {ols_pred.mean():.2f}
 print(f"95% Confidence Interval: [{lower_bound:.2f}, {upper_bound:.2f}]")
 print(f"Probability > {risk_unhealthy} (Unhealthy): {prob_unhealthy:.2f}%")
 print(f"Probability > {risk_extreme} (Extreme Event): {prob_extreme:.2f}%")
-print("The 'Probability > 150' is your Long Tail Risk.")
 
-# ==============================================================================
-# VISUALIZATION (Seaborn Upgrade for Report)
-# ==============================================================================
-plt.figure(figsize=(12, 7))
+# FIGURE 2: Simulation Output
+plt.figure(figsize=(12, 7), num="Figure 2: Forecast Results")
 
-# 1. The Distribution (KDE + Histogram)
+# 1. The Distribution
 sns.histplot(sim_pm25, bins=60, kde=True, stat="density", 
              color="teal", alpha=0.4, linewidth=0, label="Forecast Probability")
 
-# 2. Risk Zones (Color-coded Backgrounds)
-# Good (0-12), Moderate (12-35), Unhealthy (35-150), Hazardous (>150)
+# 2. Risk Zones
 plt.axvspan(0, 12, color='green', alpha=0.05, label='Good')
 plt.axvspan(12, 35, color='yellow', alpha=0.05, label='Moderate')
 plt.axvspan(35, 150, color='orange', alpha=0.05, label='Unhealthy')
-# Limit the red zone span to the max of simulation or a reasonable upper limit
 max_plot_val = max(np.max(sim_pm25), 200)
 plt.axvspan(150, max_plot_val, color='red', alpha=0.05, label='Hazardous')
 
@@ -160,41 +161,41 @@ plt.axvspan(150, max_plot_val, color='red', alpha=0.05, label='Hazardous')
 plt.axvline(mean_sim, color='blue', linestyle='-', linewidth=2, label=f'Mean Prediction ({mean_sim:.0f})')
 plt.axvline(upper_bound, color='red', linestyle='--', linewidth=2, label=f'95% Worst Case ({upper_bound:.0f})')
 
-# 4. Formatting
 plt.title(f'4.2 Simulation Output: Probabilistic Haze Forecast (N={N})', fontsize=16, weight='bold')
 plt.xlabel('Projected PM2.5 Concentration (µg/m³)', fontsize=12)
 plt.ylabel('Probability Density', fontsize=12)
-plt.xlim(0, np.percentile(sim_pm25, 99.5)) # Cut off extreme outliers for cleaner view
+plt.xlim(0, np.percentile(sim_pm25, 99.5))
 plt.legend(loc='upper right', frameon=True)
-
 plt.tight_layout()
-plt.show()
 
 # ==============================================================================
 # 5. SENSITIVITY ANALYSIS (Section 4.4)
 # ==============================================================================
 print("\n--- [4.4] Sensitivity Analysis (Rank Correlation) ---")
 
-# Calculate Spearman Rank Correlation between Inputs and Output
 correlations = {}
 for col in input_vars:
     corr, _ = spearmanr(sim_inputs[col], sim_pm25)
     correlations[col] = corr
 
-# Sort by impact
 sensitivity_df = pd.DataFrame(list(correlations.items()), columns=['Input', 'Correlation'])
 sensitivity_df['Abs_Impact'] = sensitivity_df['Correlation'].abs()
 sensitivity_df = sensitivity_df.sort_values('Abs_Impact', ascending=False)
 
 print("\n[Sensitivity Drivers]")
 print(sensitivity_df[['Input', 'Correlation']])
-print(f"The top variable ({sensitivity_df.iloc[0]['Input']}) contributes most to forecast uncertainty.")
 
-# Plot Tornado Chart
-plt.figure(figsize=(10, 6))
+# FIGURE 3: Tornado Chart
+plt.figure(figsize=(10, 6), num="Figure 3: Sensitivity Analysis")
 sns.barplot(x='Correlation', y='Input', data=sensitivity_df, palette='coolwarm')
-plt.title("4.4 Sensitivity Analysis: Which variables drive PM2.5 Risk?")
+plt.title("4.4 Sensitivity Analysis: Which variables drive PM2.5 Risk?", fontsize=14, weight='bold')
 plt.xlabel("Spearman Rank Correlation with PM2.5 Output")
 plt.axvline(0, color='black', linewidth=0.8)
 plt.grid(axis='x', linestyle='--', alpha=0.7)
+plt.tight_layout()
+
+# ==============================================================================
+# FINAL SHOW
+# ==============================================================================
+print("\nDone! Showing all analysis plots now...")
 plt.show()
