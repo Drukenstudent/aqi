@@ -39,13 +39,21 @@ plt.tight_layout()
 # ==========================================
 # 3. VISUALIZATION 2: JOINT PLOTS (Regression)
 # ==========================================
-# Note: JointGrid creates its own figure, so we don't use plt.figure() first
 if 'pm10' in plot_vars:
+    # JointGrid creates its own figure
     g = sns.jointplot(x="pm10", y="pm25", data=df_clean, kind="reg", 
                       height=8, color="g", scatter_kws={'alpha':0.3, 's':10})
-    # Fix formatting bug: Adjust title height so it doesn't overlap
-    g.fig.suptitle("Relationship: PM10 vs PM2.5", y=1.02, fontsize=14, weight='bold')
-    g.fig.canvas.manager.set_window_title("Figure 2: Joint Plot")
+    
+    # --- FIX FOR OVERCROPPING ---
+    # 1. Adjust the top margin to make room for the title
+    g.fig.subplots_adjust(top=0.95)
+    
+    # 2. Place title slightly lower so it fits in the window
+    g.fig.suptitle("Relationship: PM10 vs PM2.5", y=0.98, fontsize=14, weight='bold')
+    
+    # 3. Set Window Title
+    if hasattr(g.fig.canvas.manager, 'set_window_title'):
+        g.fig.canvas.manager.set_window_title("Figure 2: Joint Plot")
 
 # ==========================================
 # 4. VISUALIZATION 3: DISTRIBUTION MATRIX
