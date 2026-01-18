@@ -104,8 +104,9 @@ for i, col in enumerate(input_vars):
 for j in range(i + 1, len(axes_dist)):
     axes_dist[j].axis('off')
 
+# FIX: Add vertical space (hspace) to prevent overlapping titles in the grid
 plt.tight_layout()
-# NO plt.show() here! We wait until the end.
+plt.subplots_adjust(top=0.92, hspace=0.4) 
 
 # Print Fit Metrics Table
 print("\n[Distribution Justification]")
@@ -166,7 +167,10 @@ plt.xlabel('Projected PM2.5 Concentration (µg/m³)', fontsize=12)
 plt.ylabel('Probability Density', fontsize=12)
 plt.xlim(0, np.percentile(sim_pm25, 99.5))
 plt.legend(loc='upper right', frameon=True)
+
+# FIX: Add top spacing for title
 plt.tight_layout()
+plt.subplots_adjust(top=0.93)
 
 # ==============================================================================
 # 5. SENSITIVITY ANALYSIS (Section 4.4)
@@ -192,7 +196,10 @@ plt.title("4.4 Sensitivity Analysis: Which variables drive PM2.5 Risk?", fontsiz
 plt.xlabel("Spearman Rank Correlation with PM2.5 Output")
 plt.axvline(0, color='black', linewidth=0.8)
 plt.grid(axis='x', linestyle='--', alpha=0.7)
+
+# FIX: Add top spacing for title
 plt.tight_layout()
+plt.subplots_adjust(top=0.93)
 
 # ==============================================================================
 # FINAL SHOW
