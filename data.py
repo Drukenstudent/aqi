@@ -121,8 +121,8 @@ def get_data(file_path=CURRENT_FILE_PATH):
     # For other columns, fill gaps with the previous day's value
     df = df.fillna(method='ffill')
     
-    # If gaps remain (at the start), fill with 0
-    df = df.fillna(0)
+    # Use backwards and forwards fill
+    df = df.fillna(method='ffill').fillna(method='bfill')
 
     # Create Lag
     if 'pm25' in df.columns:
