@@ -15,7 +15,7 @@ except ImportError:
 # CONFIGURATION
 # ==============================================================================
 # We want to see if the model could have predicted 2024 using only past data.
-SPLIT_YEAR = 2024 
+SPLIT_YEAR = 2018
 N_SIMULATIONS = 10000
 np.random.seed(42) # Freeze randomness so results are consistent
 
@@ -37,8 +37,8 @@ if 'date' not in df_all.columns:
 df_all['date'] = pd.to_datetime(df_all['date'])
 
 # SPLIT THE DATA
-# Train = History (2014 - 2023)
-# Test  = Reality (2024)
+# Train = History (2014 - 2026)
+# Test  = Reality (SPLITYEAR)
 train_df = df_all[df_all['date'].dt.year < SPLIT_YEAR].copy()
 test_df  = df_all[df_all['date'].dt.year == SPLIT_YEAR].copy()
 # 1. Sort Training Data
@@ -150,7 +150,7 @@ sns.set_theme(style="whitegrid")
 # 1. The Simulation (Forecast)
 sns.histplot(sim_pm25, bins=80, stat="density", color="teal", alpha=0.3, label="Model Prediction (10k Scenarios)", kde=True)
 
-# 2. The Reality (Actual 2024)
+# 2. The Reality (Actual SPLITYEAR)
 if len(real_values) > 0:
     sns.kdeplot(real_values, color="black", linewidth=3, label=f"ACTUAL {SPLIT_YEAR} Data")
     # Add actual mean line
