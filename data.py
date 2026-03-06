@@ -63,14 +63,31 @@ def _fetch_and_update(csv_path):
     formatted_date = raw_date.replace('-', '/') 
 
     # Safely extract all required pollutants
+    # 1. Get real-time values (iaqi)
+    iaqi = data_payload.get('iaqi', {})
+    
+    # 2. Get daily averages as backup (forecast) if real-time is missing
+    forecast = data_payload.get('forecast', {}).get('daily', {})
+
+    def get_pollutant(name):
+        # Try real-time first
+        val = iaqi.get(name, {}).get('v')
+        if val is not None:
+            return val
+        # Try forecast average as backup
+        f_data = forecast.get(name, [])
+        if f_data:
+            return f_data[-1].get('avg', '') # Take the latest average
+        return ''
+
     new_row = {
         'date': formatted_date,
-        'pm25': iaqi.get('pm25', {}).get('v', ''),
-        'pm10': iaqi.get('pm10', {}).get('v', ''),
-        'o3':   iaqi.get('o3', {}).get('v', ''),
-        'no2':  iaqi.get('no2', {}).get('v', ''),
-        'so2':  iaqi.get('so2', {}).get('v', ''),
-        'co':   iaqi.get('co', {}).get('v', '')
+        'pm25': get_pollutant('pm25'),
+        'pm10': get_pollutant('pm10'),
+        'o3':   get_pollutant('o3'),
+        'no2':  get_pollutant('no2'),
+        'so2':  get_pollutant('so2'),
+        'co':   get_pollutant('co')
     }
 
     try:
