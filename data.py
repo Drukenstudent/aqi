@@ -31,12 +31,18 @@ def update_all_cities():
 
 def _fetch_and_update(csv_path):
     norm_path = os.path.normpath(csv_path).replace('\\', '/')
-    city_name = LOCATIONS.get(norm_path) or next((v for k, v in LOCATIONS.items() if os.path.normpath(k).replace('\\', '/') == norm_path), None)
+    # Improved city lookup
+    city_name = LOCATIONS.get(norm_path)
+    if not city_name:
+        for key, val in LOCATIONS.items():
+            if os.path.normpath(key).replace('\\', '/') == norm_path:
+                city_name = val
+                break
             
     if not city_name:
         return 
 
-    print(f"🔄 Fetching all pollutants for: {city_name}...")
+    print(f"🔄 Fetching data for: {city_name}...")
     try:
         url = f"https://api.waqi.info/feed/{city_name}/?token={API_TOKEN}"
         response = requests.get(url, timeout=10)
@@ -46,7 +52,6 @@ def _fetch_and_update(csv_path):
         return 
 
     if payload.get('status') != 'ok':
-        print(f"⚠️ API returned error for {city_name}: {payload.get('data')}")
         return
 
     data_payload = payload.get('data', {})
@@ -57,7 +62,7 @@ def _fetch_and_update(csv_path):
     if not raw_date: return
     formatted_date = raw_date.replace('-', '/') 
 
-    # Fetching all 6 major pollutants safely using .get()
+    # Safely extract all required pollutants
     new_row = {
         'date': formatted_date,
         'pm25': iaqi.get('pm25', {}).get('v', ''),
@@ -71,24 +76,22 @@ def _fetch_and_update(csv_path):
     try:
         if os.path.exists(csv_path):
             df = pd.read_csv(csv_path)
-            df.columns = df.columns.str.strip()
+            df.columns = df.columns.str.strip() # Clean column names
             
-            # Check if date already exists to avoid duplicates
+            # Avoid duplicates using standardized date formats
             existing_dates = pd.to_datetime(df['date']).dt.strftime('%Y/%m/%d')
             target_date = pd.to_datetime(formatted_date).strftime('%Y/%m/%d')
             
             if target_date in existing_dates.values:
-                print(f"   └─ {formatted_date} already up-to-date.")
+                print(f"   └─ ✅ {formatted_date} is already up-to-date.")
                 return
             
             new_df = pd.DataFrame([new_row])
             df = pd.concat([df, new_df], ignore_index=True)
             df.to_csv(csv_path, index=False)
-            print(f"   └─ Added new data for {formatted_date}")
-        else:
-            print(f"   └─ CSV file not found at {csv_path}")
+            print(f"   └─ ✨ Added all pollutants for {formatted_date}")
     except Exception as e:
-        print(f"   └─ Error saving CSV: {e}")
+        print(f"   └─ ❌ Error updating CSV: {e}")
 
 # ==========================================
 # 3. PUBLIC DATA LOADER
