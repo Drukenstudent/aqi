@@ -25,69 +25,67 @@ LOCATIONS = {
 # ==========================================
 def _fetch_and_update(csv_path):
     norm_path = os.path.normpath(csv_path).replace('\\', '/')
-    
-    city_name = None
-    for key, val in LOCATIONS.items():
-        if os.path.normpath(key).replace('\\', '/') == norm_path:
-            city_name = val
-            break
+    # Improved city lookup
+    city_name = LOCATIONS.get(norm_path)
+    if not city_name:
+        for key, val in LOCATIONS.items():
+            if os.path.normpath(key).replace('\\', '/') == norm_path:
+                city_name = val
+                break
             
     if not city_name:
         return 
 
-    print(f"🔄 Checking updates for {city_name}...")
+    print(f"🔄 Fetching data for: {city_name}...")
     try:
         url = f"https://api.waqi.info/feed/{city_name}/?token={API_TOKEN}"
         response = requests.get(url, timeout=10)
         payload = response.json()
-    except:
+    except Exception as e:
+        print(f"❌ Connection error for {city_name}: {e}")
         return 
 
     if payload.get('status') != 'ok':
         return
 
-    data = payload.get('data', {})
-    iaqi = data.get('iaqi', {})
-    time_info = data.get('time', {})
+    data_payload = payload.get('data', {})
+    iaqi = data_payload.get('iaqi', {})
+    time_info = data_payload.get('time', {})
     
-    # 1. Get and Format Date
     raw_date = time_info.get('s', '').split(' ')[0]
     if not raw_date: return
-    
-    # Force slash format for consistency
     formatted_date = raw_date.replace('-', '/') 
 
+    # Safely extract all required pollutants
     new_row = {
         'date': formatted_date,
-        ' pm25': iaqi.get('pm25', {}).get('v', ''),
-        ' pm10': iaqi.get('pm10', {}).get('v', ''),
-        ' o3':   iaqi.get('o3', {}).get('v', ''),
-        ' no2':  iaqi.get('no2', {}).get('v', ''),
-        ' so2':  iaqi.get('so2', {}).get('v', ''),
-        ' co':   iaqi.get('co', {}).get('v', '')
+        'pm25': iaqi.get('pm25', {}).get('v', ''),
+        'pm10': iaqi.get('pm10', {}).get('v', ''),
+        'o3':   iaqi.get('o3', {}).get('v', ''),
+        'no2':  iaqi.get('no2', {}).get('v', ''),
+        'so2':  iaqi.get('so2', {}).get('v', ''),
+        'co':   iaqi.get('co', {}).get('v', '')
     }
 
     try:
         if os.path.exists(csv_path):
             df = pd.read_csv(csv_path)
+            df.columns = df.columns.str.strip() # Clean column names
             
-            # Temporary check for duplicates (handling mixed date formats)
-            existing_dates = df['date'].astype(str).str.replace('-', '/')
+            # Avoid duplicates using standardized date formats
+            existing_dates = pd.to_datetime(df['date']).dt.strftime('%Y/%m/%d')
+            target_date = pd.to_datetime(formatted_date).strftime('%Y/%m/%d')
             
-            if formatted_date in existing_dates.values:
-                print(f"✅ Data up-to-date for {formatted_date}")
+            if target_date in existing_dates.values:
+                print(f"   └─ ✅ {formatted_date} is already up-to-date.")
                 return
             
-            # Append
             new_df = pd.DataFrame([new_row])
             df = pd.concat([df, new_df], ignore_index=True)
             df.to_csv(csv_path, index=False)
-            print(f"✅ UPDATED: Added {formatted_date}")
-        else:
-            print(f"❌ File not found: {csv_path}")
-
+            print(f"   └─ ✨ Added all pollutants for {formatted_date}")
     except Exception as e:
-        print(f"❌ CSV Error: {e}")
+        print(f"   └─ ❌ Error updating CSV: {e}")
 
 # ==========================================
 # 3. PUBLIC DATA LOADER
