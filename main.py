@@ -137,13 +137,13 @@ try:
     log_data = np.log(np.maximum(raw_data_jittered, 0.001)) 
     
     def get_weighted_stats(df, w):
-    val = df.values
-    avg = np.average(val, axis=0, weights=w)
-    diff = val - avg
-    cov = (w[:, None] * diff).T @ diff / np.sum(w)
-    return avg, cov
+        val = df.values
+        avg = np.average(val, axis=0, weights=w)
+        diff = val - avg
+        cov = (w[:, None] * diff).T @ diff / np.sum(w)
+        return avg, cov
 
-mu_log, cov_log = get_weighted_stats(log_data, weights)
+    mu_log, cov_log = get_weighted_stats(log_data, weights)
 
     # FIX: Remove '.values' (cov_log is already an array)
     cov_log[np.diag_indices_from(cov_log)] += 1e-4
