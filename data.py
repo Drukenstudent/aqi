@@ -6,7 +6,7 @@ import os
 # 1. CONFIGURATION
 # ==========================================
 API_TOKEN = "c95bd6ad019cee15267a1a4dda6c9e322792598a"
-CURRENT_FILE_PATH = 'PM 2.5 Data/hanoi-air-quality.csv'
+CURRENT_FILE_PATH = 'PM 2.5 Data/west,-singapore-air-quality.csv'
 
 LOCATIONS = {
     'PM 2.5 Data/hanoi-air-quality.csv': 'hanoi',
