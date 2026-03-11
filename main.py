@@ -5,7 +5,7 @@ from scipy.stats import lognorm, norm, kstest, spearmanr
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# IMPORT YOUR MASTER LOADER
+
 try:
     import data
 except ImportError:
@@ -51,7 +51,7 @@ if 'date' in df_clean.columns:
             weights[i] *= 0.5  # Penalize Covid years
         elif year == 2015:
             weights[i] *= 0.6  # Penalize 2015 Haze
-    print("✅ Weights applied: Moderate Time Decay + Anomaly Penalties.")
+    print("Weights applied: Moderate Time Decay + Anomaly Penalties.")
 
 # Define Variables
 target_var = 'pm25'
